@@ -100,7 +100,7 @@ pipeline {
                     sh """
                         docker stop prod-container || true
                         docker rm prod-container || true
-                        docker run -d --name prod-container -p 9091:8080 ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker run -d --name prod-container -p 9092:8080 ${DOCKER_IMAGE}:${DOCKER_TAG}
                     """
                 }
             }
