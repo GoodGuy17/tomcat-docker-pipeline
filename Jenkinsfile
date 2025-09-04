@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_IMAGE = "my-tomcat-app"
         DOCKER_TAG = "${BUILD_NUMBER}"
-        TEST_PORT = "9090"
+        TEST_PORT = "9091"
         APP_CONTEXT = "Amazon"
     }
 
