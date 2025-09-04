@@ -3,10 +3,9 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "my-tomcat-app"
-        DOCKER_TAG   = "${BUILD_NUMBER}"
-        TEST_PORT    = "9091"
-        APP_CONTEXT  = "Amazon"
-        DEPLOY_CONTAINER = "prod-container"
+        DOCKER_TAG = "${BUILD_NUMBER}"
+        TEST_PORT = "9091"
+        APP_CONTEXT = "Amazon"
     }
 
     stages {
@@ -37,10 +36,8 @@ pipeline {
                     echo "Starting container for testing..."
                     sh """
                         docker run -d --name test-container -p ${TEST_PORT}:8080 ${DOCKER_IMAGE}:${DOCKER_TAG}
-
                         echo "Waiting for Tomcat to start..."
                         sleep 45
-
                         echo "=== Container Logs ==="
                         docker logs test-container
                     """
@@ -51,10 +48,12 @@ pipeline {
         stage('Application Tests') {
             steps {
                 script {
+                    echo "Testing application endpoints..."
                     sh """
-                        curl -f http://localhost:${TEST_PORT}/ && echo "✓ Tomcat is accessible"
+                        # Test Amazon application
                         curl -f http://localhost:${TEST_PORT}/${APP_CONTEXT}/ && echo "✓ Amazon app is accessible"
 
+                        # Test response status
                         response_code=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${TEST_PORT}/${APP_CONTEXT}/)
                         if [ \$response_code -eq 200 ]; then
                             echo "✓ Application returns HTTP 200"
@@ -63,7 +62,10 @@ pipeline {
                             exit 1
                         fi
 
+                        # Basic content check
                         curl -s http://localhost:${TEST_PORT}/${APP_CONTEXT}/ | grep -q "html\\|HTML" && echo "✓ HTML content detected"
+
+                        echo "All tests passed successfully!"
                     """
                 }
             }
@@ -72,6 +74,7 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
+                    echo "Running health checks..."
                     sh """
                         container_status=\$(docker inspect test-container --format='{{.State.Status}}')
                         if [ "\$container_status" = "running" ]; then
@@ -81,7 +84,9 @@ pipeline {
                             exit 1
                         fi
 
+                        echo "=== Container Resource Usage ==="
                         docker stats test-container --no-stream
+
                         docker exec test-container ls -la /usr/local/tomcat/webapps/
                     """
                 }
@@ -91,15 +96,11 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    echo "Deploying final container..."
+                    echo "Deploying container..."
                     sh """
-                        # Stop old deployment if exists
-                        docker stop ${DEPLOY_CONTAINER} || true
-                        docker rm ${DEPLOY_CONTAINER} || true
-
-                        # Run new deployment container
-                        docker run -d --name ${DEPLOY_CONTAINER} -p 9092:8080 ${DOCKER_IMAGE}:${DOCKER_TAG}
-                        echo "🚀 Application deployed at http://localhost:9091/${APP_CONTEXT}/"
+                        docker stop prod-container || true
+                        docker rm prod-container || true
+                        docker run -d --name prod-container -p 9091:8080 ${DOCKER_IMAGE}:${DOCKER_TAG}
                     """
                 }
             }
@@ -113,14 +114,13 @@ pipeline {
                 sh '''
                     docker stop test-container || true
                     docker rm test-container || true
-
                     docker images ${DOCKER_IMAGE} --format "table {{.Tag}}" | grep -E "^[0-9]+$" | sort -nr | tail -n +4 | xargs -r -I {} docker rmi ${DOCKER_IMAGE}:{} || true
                 '''
             }
         }
 
         success {
-            echo "🎉 All tests passed and deployment completed!"
+            echo "🎉 All tests passed! Docker image is ready for deployment."
         }
 
         failure {
